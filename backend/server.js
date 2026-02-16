@@ -11,8 +11,10 @@ import aiInvoiceRouter from "./routes/aiInvoiceRouter.js";
 
 
 const app = express();
-const port = 4000;
+const port = process.env.PORT || 4000;
 
+// Trust proxy (needed for Render/Heroku to detect HTTPS correctly)
+app.set('trust proxy', true);
 
 //MIDDLEWARES - CORS: set CORS_ORIGIN when deploying (comma-separated for multiple origins)
 // Example: CORS_ORIGIN=https://invoice-generator-ymle.vercel.app,http://localhost:5173

@@ -6,7 +6,16 @@ import path from 'path'
 import { generateInvoicePdfBuffer } from "../services/pdfService.js";
 import { sendInvoiceEmail, buildInvoiceEmailContent } from "../services/emailService.js";
 
-const API_BASE = "http://localhost:4000";
+// Get base URL from request or environment variable (for production)
+function getApiBase(req) {
+  if (process.env.BACKEND_URL) {
+    return process.env.BACKEND_URL.replace(/\/+$/, "");
+  }
+  // Construct from request (works for both localhost and production)
+  const protocol = req.protocol || (req.secure ? "https" : "http");
+  const host = req.get("host") || "localhost:4000";
+  return `${protocol}://${host}`;
+}
 
 function computeTotals(items = [], taxPercent = 0) {
   const safe = Array.isArray(items) ? items.filter(Boolean) : [];
@@ -73,6 +82,7 @@ function isValidEmail(str) {
 function uploadedFilesToUrls(req) {
   const urls = {};
   if (!req.files) return urls;
+  const apiBase = getApiBase(req);
   const mapping = {
     logoName: "logoDataUrl",
     stampName: "stampDataUrl",
@@ -86,7 +96,7 @@ function uploadedFilesToUrls(req) {
     if (Array.isArray(arr) && arr[0]) {
       const filename =
         arr[0].filename || (arr[0].path && path.basename(arr[0].path));
-      if (filename) urls[mapping[field]] = `${API_BASE}/uploads/${filename}`;
+      if (filename) urls[mapping[field]] = `${apiBase}/uploads/${filename}`;
     }
   });
   return urls;

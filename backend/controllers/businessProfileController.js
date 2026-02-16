@@ -3,22 +3,32 @@ import BusinessProfile from "../models/businessModel.js";
 import { getAuth } from "@clerk/express";
 import path from "path";
 
-const API_BASE = "http://localhost:4000";
+// Get base URL from request or environment variable (for production)
+function getApiBase(req) {
+  if (process.env.BACKEND_URL) {
+    return process.env.BACKEND_URL.replace(/\/+$/, "");
+  }
+  // Construct from request (works for both localhost and production)
+  const protocol = req.protocol || (req.secure ? "https" : "http");
+  const host = req.get("host") || "localhost:4000";
+  return `${protocol}://${host}`;
+}
 
 //File to url
 function uploadedFilesToUrls(req) {
   const urls = {};
   if (!req.files) return urls;
 
+  const apiBase = getApiBase(req);
   const logoArr = req.files.logoName || req.files.logo || [];
   const stampArr = req.files.stampName || req.files.stamp || [];
   const sigArr = req.files.signatureNameMeta || req.files.signature || [];
 
-  if (logoArr[0]) urls.logoUrl = `${API_BASE}/uploads/${logoArr[0].filename}`;
+  if (logoArr[0]) urls.logoUrl = `${apiBase}/uploads/${logoArr[0].filename}`;
   if (stampArr[0])
-    urls.stampUrl = `${API_BASE}/uploads/${stampArr[0].filename}`;
+    urls.stampUrl = `${apiBase}/uploads/${stampArr[0].filename}`;
   if (sigArr[0])
-    urls.signatureUrl = `${API_BASE}/uploads/${sigArr[0].filename}`;
+    urls.signatureUrl = `${apiBase}/uploads/${sigArr[0].filename}`;
 
   return urls;
 }
