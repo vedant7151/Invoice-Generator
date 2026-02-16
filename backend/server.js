@@ -14,10 +14,21 @@ const app = express();
 const port = 4000;
 
 
-//MIDDLEWARES - CORS: set CORS_ORIGIN when deploying (e.g. your Vercel frontend URL)
-const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
+//MIDDLEWARES - CORS: set CORS_ORIGIN when deploying (comma-separated for multiple origins)
+// Example: CORS_ORIGIN=https://invoice-generator-ymle.vercel.app,http://localhost:5173
+const corsOrigins = process.env.CORS_ORIGIN 
+    ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+    : ["http://localhost:5173"];
 app.use(cors({
-    origin: corsOrigin,
+    origin: (origin, callback) => {
+        // Allow requests with no origin (mobile apps, Postman, etc.)
+        if (!origin) return callback(null, true);
+        if (corsOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true,
 }))
 app.use(express.json({ limit: '50mb' }))
