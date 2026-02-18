@@ -4,10 +4,12 @@ import { useAuth, useUser } from "@clerk/clerk-react";
 import { Upload, Image, Trash2, Save, RotateCcw, Building2, PenTool, User } from "lucide-react";
 import api from "../api/axiosConfig.js";
 import { resolveImageUrl } from "../utils/imageUrl.js";
+import { useBusinessProfile } from "../hooks/useBusinessProfile.js";
 
 const BusinessProfile = () => {
   const { isSignedIn, isLoaded } = useAuth();
   const { user } = useUser();
+  const { profile, setProfile, refresh } = useBusinessProfile();
 
   const [meta, setMeta] = useState({});
   const [saving, setSaving] = useState(false);
@@ -26,44 +28,33 @@ const BusinessProfile = () => {
   useEffect(() => {
     let mounted = true;
 
-    async function fetchProfile() {
-      if (!isLoaded || !isSignedIn) return;
-      try {
-        const res = await api.get("/api/businessProfile/me");
-        const data = res.data?.data ?? res.data;
-        if (!data || !mounted) return;
+    if (profile && mounted) {
+      const serverMeta = {
+        businessName: profile.businessName ?? "",
+        email: profile.email ?? "",
+        address: profile.address ?? "",
+        phone: profile.phone ?? "",
+        gst: profile.gst ?? "",
+        logoUrl: profile.logoUrl ?? null,
+        stampUrl: profile.stampUrl ?? null,
+        signatureUrl: profile.signatureUrl ?? null,
+        signatureOwnerName: profile.signatureOwnerName ?? "",
+        signatureOwnerTitle: profile.signatureOwnerTitle ?? "",
+        defaultTaxPercent: profile.defaultTaxPercent ?? 18,
+        notes: profile.notes ?? "",
+        profileId: profile.profileId ?? null,
+      };
 
-        const serverMeta = {
-          businessName: data.businessName ?? "",
-          email: data.email ?? "",
-          address: data.address ?? "",
-          phone: data.phone ?? "",
-          gst: data.gst ?? "",
-          logoUrl: data.logoUrl ?? null,
-          stampUrl: data.stampUrl ?? null,
-          signatureUrl: data.signatureUrl ?? null,
-          signatureOwnerName: data.signatureOwnerName ?? "",
-          signatureOwnerTitle: data.signatureOwnerTitle ?? "",
-          defaultTaxPercent: data.defaultTaxPercent ?? 18,
-          notes: data.notes ?? "",
-          profileId: data._id ?? data.id ?? null,
-        };
-
-        setMeta(serverMeta);
-        setPreviews((p) => ({
-          ...p,
-          logo: resolveImageUrl(serverMeta.logoUrl),
-          stamp: resolveImageUrl(serverMeta.stampUrl),
-          signature: resolveImageUrl(serverMeta.signatureUrl),
-        }));
-      } catch (err) {
-        if (err?.status !== 401) {
-          console.error("Error fetching business profile:", err);
-        }
-      }
+      setMeta(serverMeta);
+      setPreviews((p) => ({
+        ...p,
+        logo: profile.logoDisplayUrl ?? resolveImageUrl(serverMeta.logoUrl),
+        stamp: profile.stampDisplayUrl ?? resolveImageUrl(serverMeta.stampUrl),
+        signature:
+          profile.signatureDisplayUrl ??
+          resolveImageUrl(serverMeta.signatureUrl),
+      }));
     }
-
-    fetchProfile();
 
     return () => {
       mounted = false;
@@ -74,7 +65,7 @@ const BusinessProfile = () => {
       });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSignedIn, isLoaded]);
+  }, [profile]);
 
   function updateMeta(field, value) {
     setMeta((m) => ({ ...m, [field]: value }));
@@ -92,14 +83,6 @@ const BusinessProfile = () => {
     const objUrl = URL.createObjectURL(file);
     setFiles((f) => ({ ...f, [kind]: file }));
     setPreviews((p) => ({ ...p, [kind]: objUrl }));
-    updateMeta(
-      kind === "logo"
-        ? "logoUrl"
-        : kind === "stamp"
-          ? "stampUrl"
-          : "signatureUrl",
-      objUrl,
-    );
   }
 
   //   You can remove the preview

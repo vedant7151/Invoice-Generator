@@ -7,6 +7,7 @@ import StatusBadge from "../components/StatusBadge";
 import { Eye, Save, Upload, Trash2, Plus, FileText, Building2, User, Package } from "lucide-react";
 import api from "../api/axiosConfig.js";
 import { resolveImageUrl } from "../utils/imageUrl.js";
+import { useBusinessProfile } from "../hooks/useBusinessProfile.js";
 
 function readJSON(key, fallback = null) {
   try {
@@ -104,6 +105,7 @@ export default function CreateInvoice() {
   const isEditing = Boolean(id && id !== "new");
 
   const { isSignedIn, isLoaded } = useAuth();
+  const { profile: sharedProfile } = useBusinessProfile();
 
   // invoice & items state
   function buildDefaultInvoice() {
@@ -260,99 +262,86 @@ export default function CreateInvoice() {
     [checkInvoiceExists]
   );
 
-  /* ---------- fetch business profile as soon as page loads (when signed in) ---------- */
+  /* ---------- fetch/merge business profile via shared hook ---------- */
   useEffect(() => {
-    let mounted = true;
+    if (!sharedProfile) return;
 
-    async function fetchBusinessProfile() {
-      if (!isLoaded || !isSignedIn) return;
-      try {
-        const res = await api.get("/api/businessProfile/me");
-        const data = res.data?.data ?? res.data ?? null;
-        if (!data || !mounted) return;
-
-        const serverProfile = {
-          businessName: data.businessName ?? "",
-          email: data.email ?? "",
-          address: data.address ?? "",
-          phone: data.phone ?? "",
-          gst: data.gst ?? "",
-          defaultTaxPercent: data.defaultTaxPercent ?? 18,
-          signatureOwnerName: data.signatureOwnerName ?? "",
-          signatureOwnerTitle: data.signatureOwnerTitle ?? "",
-          logoUrl: data.logoUrl ?? null,
-          stampUrl: data.stampUrl ?? null,
-          signatureUrl: data.signatureUrl ?? null,
-        };
-
-        setProfile(serverProfile);
-
-        // Merge into invoice only if those invoice fields are empty/unset
-        setInvoice((prev) => {
-          if (!prev) return prev;
-          const shouldOverwriteBusinessName =
-            !prev.fromBusinessName || prev.fromBusinessName.trim() === "";
-          const shouldOverwriteEmail =
-            !prev.fromEmail || prev.fromEmail.trim() === "";
-          const shouldOverwriteAddress =
-            !prev.fromAddress || prev.fromAddress.trim() === "";
-          const shouldOverwritePhone =
-            !prev.fromPhone || prev.fromPhone.trim() === "";
-          const shouldOverwriteGst =
-            !prev.fromGst || prev.fromGst.trim() === "";
-
-          const merged = {
-            ...prev,
-            fromBusinessName: shouldOverwriteBusinessName
-              ? serverProfile.businessName
-              : prev.fromBusinessName,
-            fromEmail: shouldOverwriteEmail
-              ? serverProfile.email
-              : prev.fromEmail,
-            fromAddress: shouldOverwriteAddress
-              ? serverProfile.address
-              : prev.fromAddress,
-            fromPhone: shouldOverwritePhone
-              ? serverProfile.phone
-              : prev.fromPhone,
-            fromGst: shouldOverwriteGst ? serverProfile.gst : prev.fromGst,
-            logoDataUrl:
-              prev.logoDataUrl ||
-              resolveImageUrl(serverProfile.logoUrl) ||
-              null,
-            stampDataUrl:
-              prev.stampDataUrl ||
-              resolveImageUrl(serverProfile.stampUrl) ||
-              null,
-            signatureDataUrl:
-              prev.signatureDataUrl ||
-              resolveImageUrl(serverProfile.signatureUrl) ||
-              null,
-            signatureName:
-              prev.signatureName || serverProfile.signatureOwnerName || "",
-            signatureTitle:
-              prev.signatureTitle || serverProfile.signatureOwnerTitle || "",
-            taxPercent:
-              prev && prev.taxPercent !== undefined && prev.taxPercent !== null
-                ? prev.taxPercent
-                : serverProfile.defaultTaxPercent,
-          };
-
-          return merged;
-        });
-      } catch (err) {
-        if (err?.status !== 401) {
-          console.warn("Failed to fetch business profile:", err);
-        }
-      }
-    }
-
-    fetchBusinessProfile();
-
-    return () => {
-      mounted = false;
+    const serverProfile = {
+      businessName: sharedProfile.businessName ?? "",
+      email: sharedProfile.email ?? "",
+      address: sharedProfile.address ?? "",
+      phone: sharedProfile.phone ?? "",
+      gst: sharedProfile.gst ?? "",
+      defaultTaxPercent: sharedProfile.defaultTaxPercent ?? 18,
+      signatureOwnerName: sharedProfile.signatureOwnerName ?? "",
+      signatureOwnerTitle: sharedProfile.signatureOwnerTitle ?? "",
+      logoUrl: sharedProfile.logoUrl ?? null,
+      stampUrl: sharedProfile.stampUrl ?? null,
+      signatureUrl: sharedProfile.signatureUrl ?? null,
+      logoDisplayUrl: sharedProfile.logoDisplayUrl ?? null,
+      stampDisplayUrl: sharedProfile.stampDisplayUrl ?? null,
+      signatureDisplayUrl: sharedProfile.signatureDisplayUrl ?? null,
     };
-  }, [isSignedIn, isLoaded]);
+
+    setProfile(serverProfile);
+
+    // Merge into invoice only if those invoice fields are empty/unset
+    setInvoice((prev) => {
+      if (!prev) return prev;
+      const shouldOverwriteBusinessName =
+        !prev.fromBusinessName || prev.fromBusinessName.trim() === "";
+      const shouldOverwriteEmail =
+        !prev.fromEmail || prev.fromEmail.trim() === "";
+      const shouldOverwriteAddress =
+        !prev.fromAddress || prev.fromAddress.trim() === "";
+      const shouldOverwritePhone =
+        !prev.fromPhone || prev.fromPhone.trim() === "";
+      const shouldOverwriteGst =
+        !prev.fromGst || prev.fromGst.trim() === "";
+
+      const merged = {
+        ...prev,
+        fromBusinessName: shouldOverwriteBusinessName
+          ? serverProfile.businessName
+          : prev.fromBusinessName,
+        fromEmail: shouldOverwriteEmail
+          ? serverProfile.email
+          : prev.fromEmail,
+        fromAddress: shouldOverwriteAddress
+          ? serverProfile.address
+          : prev.fromAddress,
+        fromPhone: shouldOverwritePhone
+          ? serverProfile.phone
+          : prev.fromPhone,
+        fromGst: shouldOverwriteGst ? serverProfile.gst : prev.fromGst,
+        logoDataUrl:
+          prev.logoDataUrl ||
+          serverProfile.logoDisplayUrl ||
+          resolveImageUrl(serverProfile.logoUrl) ||
+          null,
+        stampDataUrl:
+          prev.stampDataUrl ||
+          serverProfile.stampDisplayUrl ||
+          resolveImageUrl(serverProfile.stampUrl) ||
+          null,
+        signatureDataUrl:
+          prev.signatureDataUrl ||
+          serverProfile.signatureDisplayUrl ||
+          resolveImageUrl(serverProfile.signatureUrl) ||
+          null,
+        signatureName:
+          prev.signatureName || serverProfile.signatureOwnerName || "",
+        signatureTitle:
+          prev.signatureTitle || serverProfile.signatureOwnerTitle || "",
+        taxPercent:
+          prev && prev.taxPercent !== undefined && prev.taxPercent !== null
+            ? prev.taxPercent
+            : serverProfile.defaultTaxPercent,
+      };
+
+      return merged;
+    });
+  }, [sharedProfile]);
 
   /* ---------- load invoice when editing (server first, fallback local) ---------- */
   useEffect(() => {

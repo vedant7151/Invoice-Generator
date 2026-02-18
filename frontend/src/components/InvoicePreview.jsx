@@ -7,6 +7,7 @@ import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { Printer, Edit, ArrowLeft, FileX, FileText } from "lucide-react";
 import api from "../api/axiosConfig.js";
 import { resolveImageUrl } from "../utils/imageUrl.js";
+import { useBusinessProfile } from "../hooks/useBusinessProfile.js";
 
 function readJSON(key, fallback = null) {
   try {
@@ -104,10 +105,9 @@ export default function InvoicePreview() {
   );
   const [invoiceError, setInvoiceError] = useState(null);
 
-  const [profile, setProfile] = useState(
-    () => readJSON("business_profile", defaultProfile) || defaultProfile
-  );
-  const [profileLoading, setProfileLoading] = useState(false);
+  const { profile: sharedProfile, loading: sharedProfileLoading } =
+    useBusinessProfile();
+  const [profile, setProfile] = useState(defaultProfile);
 
   const prevTitleRef = useRef(document.title);
 
@@ -154,60 +154,73 @@ export default function InvoicePreview() {
   }, [id, invoiceFromState]);
 
   useEffect(() => {
-    let mounted = true;
-    async function fetchProfile() {
-      setProfileLoading(true);
-      try {
-        const res = await api.get("/api/businessProfile/me");
-        const data = res.data?.data ?? res.data ?? null;
-        if (mounted && data && typeof data === "object") {
-          const normalized = {
-            businessName:
-              data.businessName ?? data.name ?? defaultProfile.businessName,
-            email: data.email ?? defaultProfile.email,
-            address: data.address ?? defaultProfile.address,
-            phone: data.phone ?? defaultProfile.phone,
-            gst: data.gst ?? defaultProfile.gst,
-            stampDataUrl:
-              data.stampUrl ?? data.stampDataUrl ?? defaultProfile.stampDataUrl,
-            signatureDataUrl:
-              data.signatureUrl ??
-              data.signatureDataUrl ??
-              defaultProfile.signatureDataUrl,
-            logoDataUrl:
-              data.logoUrl ?? data.logoDataUrl ?? defaultProfile.logoDataUrl,
-            defaultTaxPercent: Number.isFinite(Number(data.defaultTaxPercent))
-              ? Number(data.defaultTaxPercent)
-              : defaultProfile.defaultTaxPercent,
-            signatureName:
-              data.signatureOwnerName ??
-              data.signatureName ??
-              defaultProfile.signatureName,
-            signatureTitle:
-              data.signatureOwnerTitle ??
-              data.signatureTitle ??
-              defaultProfile.signatureTitle,
-          };
-          setProfile(normalized);
-          try {
-            writeJSON("business_profile", normalized);
-          } catch {}
-        }
-      } catch (err) {
-        if (mounted && err?.status !== 401) {
-          console.warn("Error fetching profile:", err);
-        }
-      } finally {
-        if (mounted) setProfileLoading(false);
+    if (!sharedProfile) {
+      const stored = readJSON("business_profile_v2", null);
+      if (stored) {
+        const normalized = {
+          businessName:
+            stored.businessName ?? defaultProfile.businessName,
+          email: stored.email ?? defaultProfile.email,
+          address: stored.address ?? defaultProfile.address,
+          phone: stored.phone ?? defaultProfile.phone,
+          gst: stored.gst ?? defaultProfile.gst,
+          stampDataUrl:
+            stored.stampDisplayUrl ??
+            stored.stampUrl ??
+            defaultProfile.stampDataUrl,
+          signatureDataUrl:
+            stored.signatureDisplayUrl ??
+            stored.signatureUrl ??
+            defaultProfile.signatureDataUrl,
+          logoDataUrl:
+            stored.logoDisplayUrl ??
+            stored.logoUrl ??
+            defaultProfile.logoDataUrl,
+          defaultTaxPercent:
+            stored.defaultTaxPercent ?? defaultProfile.defaultTaxPercent,
+          signatureName:
+            stored.signatureOwnerName ?? defaultProfile.signatureName,
+          signatureTitle:
+            stored.signatureOwnerTitle ?? defaultProfile.signatureTitle,
+        };
+        setProfile(normalized);
       }
+      return;
     }
 
-    const stored = readJSON("business_profile", null);
-    if (!stored) fetchProfile();
-    return () => {
-      mounted = false;
+    const normalized = {
+      businessName:
+        sharedProfile.businessName ?? defaultProfile.businessName,
+      email: sharedProfile.email ?? defaultProfile.email,
+      address: sharedProfile.address ?? defaultProfile.address,
+      phone: sharedProfile.phone ?? defaultProfile.phone,
+      gst: sharedProfile.gst ?? defaultProfile.gst,
+      stampDataUrl:
+        sharedProfile.stampDisplayUrl ??
+        sharedProfile.stampUrl ??
+        defaultProfile.stampDataUrl,
+      signatureDataUrl:
+        sharedProfile.signatureDisplayUrl ??
+        sharedProfile.signatureUrl ??
+        defaultProfile.signatureDataUrl,
+      logoDataUrl:
+        sharedProfile.logoDisplayUrl ??
+        sharedProfile.logoUrl ??
+        defaultProfile.logoDataUrl,
+      defaultTaxPercent:
+        sharedProfile.defaultTaxPercent ?? defaultProfile.defaultTaxPercent,
+      signatureName:
+        sharedProfile.signatureOwnerName ?? defaultProfile.signatureName,
+      signatureTitle:
+        sharedProfile.signatureOwnerTitle ?? defaultProfile.signatureTitle,
     };
-  }, []);
+    setProfile(normalized);
+    try {
+      writeJSON("business_profile", normalized);
+    } catch {
+      // ignore
+    }
+  }, [sharedProfile]);
 
 
   useEffect(() => {
@@ -247,7 +260,7 @@ export default function InvoicePreview() {
     }, 500);
   }, [invoice]);
 
-  if (!invoice && (loadingInvoice || profileLoading)) {
+  if (!invoice && (loadingInvoice || sharedProfileLoading)) {
     return <div className="p-6">Loading…</div>;
   }
   if (!invoice) {

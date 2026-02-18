@@ -41,7 +41,29 @@ connectDB()
 // Ensure uploads dir exists (gitignored)
 const uploadsDir = path.join(process.cwd(), "uploads")
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
-app.use('/uploads', express.static(uploadsDir))
+
+// Serve static uploads (before API routes)
+app.use('/uploads', express.static(uploadsDir, {
+  setHeaders: (res, filePath) => {
+    // Allow CORS for images
+    res.set('Access-Control-Allow-Origin', '*');
+  }
+}))
+
+// Diagnostic route to check uploads directory
+app.get('/uploads-check', (req, res) => {
+  try {
+    const files = fs.readdirSync(uploadsDir);
+    res.json({
+      uploadsDir,
+      fileCount: files.length,
+      files: files.slice(0, 10), // First 10 files
+      message: 'Uploads directory is accessible'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message, uploadsDir });
+  }
+})
 app.use('/api/invoice' , invoiceRouter)
 
 app.use('/api/businessProfile' , businessProfileRouter)
