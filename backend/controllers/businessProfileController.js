@@ -1,34 +1,55 @@
 import mongoose from "mongoose";
 import BusinessProfile from "../models/businessModel.js";
 import { getAuth } from "@clerk/express";
-import path from "path";
+import cloudinary from "../config/cloudinary.js";
 
-// Get base URL from request or environment variable (for production)
-function getApiBase(req) {
-  if (process.env.BACKEND_URL) {
-    return process.env.BACKEND_URL.replace(/\/+$/, "");
-  }
-  // Construct from request (works for both localhost and production)
-  const protocol = req.protocol || (req.secure ? "https" : "http");
-  const host = req.get("host") || "localhost:4000";
-  return `${protocol}://${host}`;
+const CLOUDINARY_FOLDER =
+  process.env.CLOUDINARY_FOLDER || "invoice-generator/business-profile";
+
+async function uploadSingleToCloudinary(file, publicIdPrefix) {
+  if (!file || !file.buffer) return null;
+
+  const unique = `${publicIdPrefix}-${Date.now()}-${Math.round(
+    Math.random() * 1e9,
+  )}`;
+
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: CLOUDINARY_FOLDER,
+        public_id: unique,
+        resource_type: "image",
+      },
+      (error, result) => {
+        if (error) {
+          console.error("[cloudinary] upload error:", error);
+          return reject(error);
+        }
+        resolve(result.secure_url);
+      },
+    );
+
+    stream.end(file.buffer);
+  });
 }
 
-//File to url
-function uploadedFilesToUrls(req) {
+async function uploadedFilesToCloudinary(req, userId) {
   const urls = {};
   if (!req.files) return urls;
 
-  const apiBase = getApiBase(req);
   const logoArr = req.files.logoName || req.files.logo || [];
   const stampArr = req.files.stampName || req.files.stamp || [];
   const sigArr = req.files.signatureNameMeta || req.files.signature || [];
 
-  if (logoArr[0]) urls.logoUrl = `${apiBase}/uploads/${logoArr[0].filename}`;
-  if (stampArr[0])
-    urls.stampUrl = `${apiBase}/uploads/${stampArr[0].filename}`;
-  if (sigArr[0])
-    urls.signatureUrl = `${apiBase}/uploads/${sigArr[0].filename}`;
+  const [logoUrl, stampUrl, signatureUrl] = await Promise.all([
+    uploadSingleToCloudinary(logoArr[0], `logo-${userId || "user"}`),
+    uploadSingleToCloudinary(stampArr[0], `stamp-${userId || "user"}`),
+    uploadSingleToCloudinary(sigArr[0], `signature-${userId || "user"}`),
+  ]);
+
+  if (logoUrl) urls.logoUrl = logoUrl;
+  if (stampUrl) urls.stampUrl = stampUrl;
+  if (signatureUrl) urls.signatureUrl = signatureUrl;
 
   return urls;
 }
@@ -43,9 +64,9 @@ export async function createBusinessProfile(req, res) {
         .json({ success: false, message: "Authentication required" });
     }
 
-    const body = req.body || {}
-    const fileUrls = uploadedFilesToUrls(req)
-     const profile = new BusinessProfile({
+    const body = req.body || {};
+    const fileUrls = await uploadedFilesToCloudinary(req, userId);
+    const profile = new BusinessProfile({
       owner: userId,
       businessName: body.businessName || "ABC Solutions",
       email: body.email || "",
@@ -58,11 +79,19 @@ export async function createBusinessProfile(req, res) {
       signatureOwnerName: body.signatureOwnerName || "",
       signatureOwnerTitle: body.signatureOwnerTitle || "",
       defaultTaxPercent:
-        body.defaultTaxPercent !== undefined ? Number(body.defaultTaxPercent) : 18,
+        body.defaultTaxPercent !== undefined
+          ? Number(body.defaultTaxPercent)
+          : 18,
     });
 
-    const saved = await profile.save()
-    return res.status(201).json({success : true , data : saved , message : "Business Profile Created"})
+    const saved = await profile.save();
+    return res
+      .status(201)
+      .json({
+        success: true,
+        data: saved,
+        message: "Business Profile Created",
+      });
 
   } catch (error) {
     console.log(error)
@@ -88,7 +117,7 @@ export async function updateBusinessProfile(req , res){
 
     const {id} = req.params
     const body = req.body || {}
-    const fileUrls = uploadedFilesToUrls(req)  
+    const fileUrls = await uploadedFilesToCloudinary(req, userId)
 
     const exixsting = await BusinessProfile.findById(id)
     if(!exixsting){
